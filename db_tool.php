@@ -2015,6 +2015,7 @@ if ($tab === 'mysql'):
         <a href="?tab=mysql&sub=tables"    class="btn btn-outline btn-sm <?= $sub==='tables'?'active':'' ?>" style="<?= $sub==='tables'?'background:#e94560;color:#fff;border-color:#e94560':'' ?>">数据表管理</a>
         <a href="?tab=mysql&sub=query"     class="btn btn-outline btn-sm <?= $sub==='query'?'active':'' ?>" style="<?= $sub==='query'?'background:#e94560;color:#fff;border-color:#e94560':'' ?>">SQL 查询</a>
         <a href="?tab=mysql&sub=import"    class="btn btn-outline btn-sm <?= $sub==='import'?'active':'' ?>" style="<?= $sub==='import'?'background:#e94560;color:#fff;border-color:#e94560':'' ?>">导入</a>
+        <a href="batch_sql.php?tab=mysql" class="btn btn-outline btn-sm" style="color:#e94560;font-weight:600;border-color:#e94560">批量SQL</a>
         <a href="?tab=mysql&sub=export"    class="btn btn-outline btn-sm <?= $sub==='export'?'active':'' ?>" style="<?= $sub==='export'?'background:#e94560;color:#fff;border-color:#e94560':'' ?>">导出</a>
         <a href="?tab=mysql&action=disconnect" class="btn btn-outline btn-sm" style="margin-left:auto;color:#c92a2a" onclick="return confirm('确定断开连接?')">断开</a>
     </div>
@@ -3059,6 +3060,7 @@ if ($tab === 'sqlite'):
         <a href="?tab=sqlite&sub=tables" class="btn btn-outline btn-sm <?= $sub==='tables'?'active':'' ?>" style="<?= $sub==='tables'?'background:#e94560;color:#fff;border-color:#e94560':'' ?>">数据表管理</a>
         <a href="?tab=sqlite&sub=query"  class="btn btn-outline btn-sm <?= $sub==='query'?'active':'' ?>" style="<?= $sub==='query'?'background:#e94560;color:#fff;border-color:#e94560':'' ?>">SQL 查询</a>
         <a href="?tab=sqlite&sub=import" class="btn btn-outline btn-sm <?= $sub==='import'?'active':'' ?>" style="<?= $sub==='import'?'background:#e94560;color:#fff;border-color:#e94560':'' ?>">导入</a>
+        <a href="batch_sql.php?tab=sqlite" class="btn btn-outline btn-sm" style="color:#e94560;font-weight:600;border-color:#e94560">批量SQL</a>
         <a href="?tab=sqlite&sub=export" class="btn btn-outline btn-sm <?= $sub==='export'?'active':'' ?>" style="<?= $sub==='export'?'background:#e94560;color:#fff;border-color:#e94560':'' ?>">导出</a>
         <a href="?tab=sqlite&action=disconnect" class="btn btn-outline btn-sm" style="margin-left:auto;color:#c92a2a" onclick="return confirm('确定断开?')">断开</a>
     </div>
