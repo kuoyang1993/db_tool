@@ -545,6 +545,58 @@ if ($tab === 'mysql') {
             $ext = strtolower(pathinfo($_FILES['import_file']['name'], PATHINFO_EXTENSION));
             try {
                 if ($ext === 'sql') {
+                    // ----- 表级导入：SQL 文件导入到指定表 -----
+                    if ($importMode === 'table') {
+                        $table = post('import_table');
+                        if (!$table) { flash('请指定目标表名', 'error'); }
+                        else {
+                            $content = file_get_contents($tmp);
+                            // 移除 BOM
+                            if (substr($content, 0, 3) === chr(0xEF).chr(0xBB).chr(0xBF)) {
+                                $content = substr($content, 3);
+                            }
+                            $statements = array_filter(
+                                array_map('trim', preg_split('/;\\s*\\n|;\\s*$/', $content, -1, PREG_SPLIT_NO_EMPTY)),
+                                function($s) { return $s !== ''; }
+                            );
+                            if (empty($statements)) {
+                                flash('SQL 文件为空或无有效语句', 'error');
+                            } else {
+                                $successCount = 0;
+                                $failedCount = 0;
+                                $errors = [];
+                                foreach ($statements as $si => $sql) {
+                                    $sql = trim($sql);
+                                    if ($sql === '') continue;
+                                    if (preg_match('/^--/', $sql) || preg_match('/^\\/\\*/', $sql)) continue;
+                                    // 表级导入：跳过 CREATE TABLE / DROP TABLE 等建表语句，只执行 INSERT
+                                    if (preg_match('/^(CREATE|DROP)\s+TABLE/i', $sql)) continue;
+                                    // 将 INSERT 转为 INSERT IGNORE，遇到主键重复自动跳过
+                                    $sql = preg_replace('/^INSERT\s+INTO\b/i', 'INSERT IGNORE INTO', $sql);
+                                    try {
+                                        $pdo->exec($sql);
+                                        $successCount++;
+                                    } catch (Exception $e) {
+                                        $failedCount++;
+                                        $errMsg = $e->getMessage();
+                                        if (mb_strlen($errMsg) > 120) $errMsg = mb_substr($errMsg, 0, 120) . '...';
+                                        $errors[] = "第" . ($si + 1) . "条: " . $errMsg;
+                                    }
+                                }
+                                if ($failedCount === 0) {
+                                    flash("SQL 导入成功，共执行 {$successCount} 条语句到表 `{$table}`", 'success');
+                                } else {
+                                    $msg = "导入完成（部分成功）。成功 {$successCount} 条，失败 {$failedCount} 条。";
+                                    if (!empty($errors)) {
+                                        $msg .= "\n" . implode("\n", array_slice($errors, 0, 5));
+                                        if (count($errors) > 5) $msg .= "\n...等" . count($errors) . "个错误";
+                                    }
+                                    flash($msg, $successCount > 0 ? 'warning' : 'error');
+                                }
+                            }
+                        }
+                    // ----- 数据库级导入：SQL 文件导入到数据库（原有逻辑）-----
+                    } else {
                     // 用户选项
                     $tableAction = post('table_action', 'append'); // skip / drop_recreate / append
                     $pkAction    = post('pk_action', 'skip');      // skip / update / error
@@ -684,6 +736,7 @@ if ($tab === 'mysql') {
                         }
                         flash($msg, $successCount > 0 ? 'warning' : 'error');
                     }
+                    } // 数据库级导入 else 块结束
                 } elseif ($ext === 'csv') {
                     $table = post('import_table');
                     if (!$table) { flash('请指定目标表名', 'error'); }
@@ -1167,6 +1220,58 @@ if ($tab === 'sqlite') {
             $ext = strtolower(pathinfo($_FILES['import_file']['name'], PATHINFO_EXTENSION));
             try {
                 if ($ext === 'sql') {
+                    // ----- 表级导入：SQL 文件导入到指定表 -----
+                    if ($importMode === 'table') {
+                        $table = post('import_table');
+                        if (!$table) { flash('请指定目标表名', 'error'); }
+                        else {
+                            $content = file_get_contents($tmp);
+                            // 移除 BOM
+                            if (substr($content, 0, 3) === chr(0xEF).chr(0xBB).chr(0xBF)) {
+                                $content = substr($content, 3);
+                            }
+                            $statements = array_filter(
+                                array_map('trim', preg_split('/;\\s*\\n|;\\s*$/', $content, -1, PREG_SPLIT_NO_EMPTY)),
+                                function($s) { return $s !== ''; }
+                            );
+                            if (empty($statements)) {
+                                flash('SQL 文件为空或无有效语句', 'error');
+                            } else {
+                                $successCount = 0;
+                                $failedCount = 0;
+                                $errors = [];
+                                foreach ($statements as $si => $sql) {
+                                    $sql = trim($sql);
+                                    if ($sql === '') continue;
+                                    if (preg_match('/^--/', $sql) || preg_match('/^\\/\\*/', $sql)) continue;
+                                    // 表级导入：跳过 CREATE TABLE / DROP TABLE 等建表语句，只执行 INSERT
+                                    if (preg_match('/^(CREATE|DROP)\s+TABLE/i', $sql)) continue;
+                                    // 将 INSERT 转为 INSERT IGNORE，遇到主键重复自动跳过
+                                    $sql = preg_replace('/^INSERT\s+INTO\b/i', 'INSERT IGNORE INTO', $sql);
+                                    try {
+                                        $pdo->exec($sql);
+                                        $successCount++;
+                                    } catch (Exception $e) {
+                                        $failedCount++;
+                                        $errMsg = $e->getMessage();
+                                        if (mb_strlen($errMsg) > 120) $errMsg = mb_substr($errMsg, 0, 120) . '...';
+                                        $errors[] = "第" . ($si + 1) . "条: " . $errMsg;
+                                    }
+                                }
+                                if ($failedCount === 0) {
+                                    flash("SQL 导入成功，共执行 {$successCount} 条语句到表 `{$table}`", 'success');
+                                } else {
+                                    $msg = "导入完成（部分成功）。成功 {$successCount} 条，失败 {$failedCount} 条。";
+                                    if (!empty($errors)) {
+                                        $msg .= "\n" . implode("\n", array_slice($errors, 0, 5));
+                                        if (count($errors) > 5) $msg .= "\n...等" . count($errors) . "个错误";
+                                    }
+                                    flash($msg, $successCount > 0 ? 'warning' : 'error');
+                                }
+                            }
+                        }
+                    // ----- 数据库级导入：SQL 文件导入到数据库（原有逻辑）-----
+                    } else {
                     // 用户选项
                     $tableAction = post('table_action', 'append'); // skip / drop_recreate / append
                     $pkAction    = post('pk_action', 'skip');      // skip / update / error
@@ -1266,6 +1371,7 @@ if ($tab === 'sqlite') {
                         }
                         flash($msg, $successCount > 0 ? 'warning' : 'error');
                     }
+                    } // 数据库级导入 else 块结束
                 } elseif ($ext === 'csv') {
                     $table = post('import_table');
                     if (!$table) { flash('请指定目标表名', 'error'); }
@@ -1765,6 +1871,7 @@ th{position:relative}
 .field-header .col-len{width:55px}
 .field-header .col-dec{width:50px}
 .field-header .col-check{width:40px;text-align:center}
+.field-row .col-check input[type="checkbox"]:disabled,.field-header .col-check input[type="checkbox"]:disabled{cursor:not-allowed;opacity:0.45}
 .field-header .col-comment{flex:1;min-width:80px}
 .field-header .col-action{width:40px}
 .idx-row{display:flex;gap:8px;align-items:center;padding:8px 6px;border-bottom:1px solid #eee;font-size:13px}
@@ -1818,6 +1925,7 @@ th{position:relative}
 .cr-col-dec{width:50px;flex-shrink:0}
 .cr-col-chk{width:48px;text-align:center;flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:2px;font-size:11px;color:#555}
 .cr-col-chk input[type="checkbox"]{width:15px;height:15px;cursor:pointer;accent-color:#e94560;margin:0}
+.cr-col-chk input[type="checkbox"]:disabled{cursor:not-allowed;accent-color:#aaa;opacity:0.45}
 .cr-col-def{width:100px;flex-shrink:0}
 .cr-col-cmt{flex:1;min-width:70px}
 .cr-col-act{width:76px;flex-shrink:0;display:flex;gap:2px;justify-content:center}
@@ -2700,7 +2808,7 @@ window._mysqlFilterQuery = <?= json_encode($filterQuery) ?>;
                         <input type="number" class="col-dec" name="fld_dec[]" value="<?= h($decimal) ?>" min="0">
                         <span class="col-check"><input type="checkbox" name="fld_pk[]" value="<?= $ci ?>" <?= $col['Key']==='PRI'?'checked':'' ?> onchange="onPkChange(this)"></span>
                         <span class="col-check"><input type="checkbox" name="fld_null[]" value="<?= $ci ?>" <?= $col['Null']==='YES'?'':'checked' ?>></span>
-                        <span class="col-check" <?= (in_array($baseType,['INT','BIGINT','TINYINT','SMALLINT']) && $col['Key']==='PRI') ? '' : 'style="display:none"' ?>><input type="checkbox" name="fld_ai[]" value="<?= $ci ?>" <?= $col['Extra']==='auto_increment'?'checked':'' ?> onchange="onAiChange(this)"></span>
+                        <span class="col-check"><input type="checkbox" name="fld_ai[]" value="<?= $ci ?>" <?= $col['Extra']==='auto_increment'?'checked':'' ?> onchange="onAiChange(this)" <?= in_array($baseType,['INT','BIGINT','TINYINT','SMALLINT','MEDIUMINT']) ? '' : 'disabled' ?>></span>
                         <input type="text" class="col-name" name="fld_default[]" value="<?= h($col['Default'] ?? '') ?>" placeholder="NULL">
                         <input type="text" class="col-comment" name="fld_comment[]" placeholder="字段注释">
                         <button type="button" class="btn btn-outline btn-xs" style="color:#c92a2a" onclick="this.closest('.field-row').remove()" title="删除字段">✕</button>
@@ -2835,11 +2943,18 @@ window._mysqlFilterQuery = <?= json_encode($filterQuery) ?>;
     <div class="card">
         <div class="card-header">导入数据 —— 导入到表</div>
         <div class="card-body">
-            <p class="text-muted mb-sm">上传 .csv 文件，将数据导入到指定表中（CSV 首行必须为列名）</p>
+            <p class="text-muted mb-sm">选择导入格式，将数据导入到指定表中</p>
             <form method="post" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="mysql_import">
                 <input type="hidden" name="import_mode" value="table">
-                <div class="form-group"><label>选择 CSV 文件</label><input type="file" name="import_file" accept=".csv" required></div>
+                <div class="form-group">
+                    <label>导入格式：</label>
+                    <div class="radio-group">
+                        <label class="radio-item"><input type="radio" name="table_import_format" value="csv" checked onchange="document.getElementById('mysqlTableFile').accept='.csv';document.getElementById('mysqlTableFileLabel').textContent='选择 CSV 文件（首行必须为列名）'"> CSV 文件（首行必须为列名）</label>
+                        <label class="radio-item"><input type="radio" name="table_import_format" value="sql" onchange="document.getElementById('mysqlTableFile').accept='.sql';document.getElementById('mysqlTableFileLabel').textContent='选择 SQL 文件（含 INSERT 语句）'"> SQL 文件（含 INSERT 语句）</label>
+                    </div>
+                </div>
+                <div class="form-group"><label id="mysqlTableFileLabel">选择 CSV 文件（首行必须为列名）</label><input type="file" name="import_file" id="mysqlTableFile" accept=".csv" required></div>
                 <div class="form-group"><label>目标表名</label><input name="import_table" placeholder="例如: users" required></div>
                 <button class="btn btn-primary" type="submit">导入到表</button>
             </form>
@@ -3413,11 +3528,18 @@ window._sqliteFilterQuery = <?= json_encode($filterQuery) ?>;
     <div class="card">
         <div class="card-header">导入数据 —— 导入到表</div>
         <div class="card-body">
-            <p class="text-muted mb-sm">上传 .csv 文件（首行为列名），导入到指定表中</p>
+            <p class="text-muted mb-sm">选择导入格式，将数据导入到指定表中</p>
             <form method="post" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="sqlite_import">
                 <input type="hidden" name="import_mode" value="table">
-                <div class="form-group"><label>选择 CSV 文件</label><input type="file" name="import_file" accept=".csv" required></div>
+                <div class="form-group">
+                    <label>导入格式：</label>
+                    <div class="radio-group">
+                        <label class="radio-item"><input type="radio" name="table_import_format" value="csv" checked onchange="document.getElementById('sqliteTableFile').accept='.csv';document.getElementById('sqliteTableFileLabel').textContent='选择 CSV 文件（首行必须为列名）'"> CSV 文件（首行必须为列名）</label>
+                        <label class="radio-item"><input type="radio" name="table_import_format" value="sql" onchange="document.getElementById('sqliteTableFile').accept='.sql';document.getElementById('sqliteTableFileLabel').textContent='选择 SQL 文件（含 INSERT 语句）'"> SQL 文件（含 INSERT 语句）</label>
+                    </div>
+                </div>
+                <div class="form-group"><label id="sqliteTableFileLabel">选择 CSV 文件（首行必须为列名）</label><input type="file" name="import_file" id="sqliteTableFile" accept=".csv" required></div>
                 <div class="form-group"><label>目标表名</label><input name="import_table" placeholder="例如: users" required></div>
                 <button class="btn btn-primary" type="submit">导入到表</button>
             </form>
@@ -4353,9 +4475,23 @@ function initDesignAiVisibility() {
     });
 }
 
-/** 自增勾选框永远显示，不做任何隐藏 */
+/** 自增勾选框始终可见，但仅对整数类型可勾选（非整数类型置灰禁用） */
 function updateAiVisibility(row) {
-    // 自增勾选框始终可见，无需任何操作
+    if (!row) return;
+    var typeSel = row.querySelector('select[name="fld_type[]"]');
+    var aiCb = row.querySelector('input[name="fld_ai[]"]');
+    if (!aiCb) return;
+    var isInt = typeSel && isIntType(typeSel.value.toUpperCase());
+    if (isInt) {
+        aiCb.disabled = false;
+        if (aiCb.parentElement) aiCb.parentElement.style.opacity = '';
+        if (aiCb.parentElement) aiCb.parentElement.style.cursor = '';
+    } else {
+        aiCb.disabled = true;
+        aiCb.checked = false;
+        if (aiCb.parentElement) aiCb.parentElement.style.opacity = '0.45';
+        if (aiCb.parentElement) aiCb.parentElement.style.cursor = 'not-allowed';
+    }
 }
 
 function addCrFieldRow() {
@@ -4470,6 +4606,12 @@ function onAiChange(cb) {
     if (cb.checked) {
         var row = cb.closest('.field-row') || cb.closest('.cr-field-row');
         if (!row) return;
+        // 仅整数类型允许勾选自增，非整数类型直接拒绝
+        var typeSel = row.querySelector('select[name="fld_type[]"]');
+        if (typeSel && !isIntType(typeSel.value.toUpperCase())) {
+            cb.checked = false;
+            return;
+        }
         var pkCb = row.querySelector('input[name="fld_pk[]"]');
         if (pkCb) pkCb.checked = true;
         // AUTO_INCREMENT 必须 NOT NULL → 自动勾选非空
