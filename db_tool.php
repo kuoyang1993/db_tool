@@ -2017,6 +2017,7 @@ if ($tab === 'mysql'):
         <a href="?tab=mysql&sub=import"    class="btn btn-outline btn-sm <?= $sub==='import'?'active':'' ?>" style="<?= $sub==='import'?'background:#e94560;color:#fff;border-color:#e94560':'' ?>">导入</a>
         <a href="batch_sql.php?tab=mysql" class="btn btn-outline btn-sm" style="color:#e94560;font-weight:600;border-color:#e94560">批量SQL</a>
         <a href="?tab=mysql&sub=export"    class="btn btn-outline btn-sm <?= $sub==='export'?'active':'' ?>" style="<?= $sub==='export'?'background:#e94560;color:#fff;border-color:#e94560':'' ?>">导出</a>
+        <a href="javascript:void(0)" class="btn btn-outline btn-sm" onclick="openSyncModal()" style="color:#e94560;font-weight:600;border-color:#e94560">数据同步</a>
         <a href="?tab=mysql&action=disconnect" class="btn btn-outline btn-sm" style="margin-left:auto;color:#c92a2a" onclick="return confirm('确定断开连接?')">断开</a>
     </div>
 
@@ -4784,6 +4785,108 @@ function crValidateForm() {
         initDesignAiVisibility();
     }
 })();
+</script>
+
+<!-- 数据同步弹窗 -->
+<?php $syncCfg = $_SESSION['mysql_config'] ?? []; ?>
+<div id="syncModal" class="modal-overlay" style="display:none">
+<div class="modal" style="max-width:820px;width:92%;max-height:90vh;padding:20px 24px">
+<h3>全量数据同步</h3>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px">
+<div>
+<div style="font-weight:600;margin-bottom:8px;font-size:14px;color:#333">源数据库</div>
+<div class="form-group"><label>主机</label><input id="sync_src_host" value="<?= h($syncCfg['host'] ?? '127.0.0.1') ?>"></div>
+<div class="form-group"><label>端口</label><input id="sync_src_port" value="<?= h($syncCfg['port'] ?? '3306') ?>"></div>
+<div class="form-group"><label>用户名</label><input id="sync_src_user" value="<?= h($syncCfg['user'] ?? 'root') ?>"></div>
+<div class="form-group"><label>密码</label><input type="password" id="sync_src_pass" value="<?= h($syncCfg['pass'] ?? '') ?>"></div>
+<div class="form-group"><label>数据库名</label><input id="sync_src_dbname" value="<?= h($syncCfg['dbname'] ?? '') ?>" placeholder="源库名"></div>
+</div>
+<div>
+<div style="font-weight:600;margin-bottom:8px;font-size:14px;color:#333">目标数据库</div>
+<div class="form-group"><label>主机</label><input id="sync_tgt_host" value="<?= h($syncCfg['host'] ?? '127.0.0.1') ?>"></div>
+<div class="form-group"><label>端口</label><input id="sync_tgt_port" value="<?= h($syncCfg['port'] ?? '3306') ?>"></div>
+<div class="form-group"><label>用户名</label><input id="sync_tgt_user" value="<?= h($syncCfg['user'] ?? 'root') ?>"></div>
+<div class="form-group"><label>密码</label><input type="password" id="sync_tgt_pass"></div>
+<div class="form-group"><label>数据库名</label><input id="sync_tgt_dbname" placeholder="目标库名"></div>
+</div>
+</div>
+<button class="btn btn-primary btn-sm" onclick="loadSyncTables()" id="syncLoadBtn">加载数据表</button>
+<div id="syncTablesWrap" style="display:none;margin-top:12px;max-height:240px;overflow-y:auto;border:1px solid #eee;border-radius:6px;padding:10px">
+<div style="font-size:13px;color:#666;margin-bottom:6px">选择要同步的表（默认全选）：</div>
+<label style="margin-bottom:4px;display:block;font-size:13px;cursor:pointer"><input type="checkbox" id="syncCheckAll" onchange="toggleSyncAll()" checked> 全选 / 取消全选</label>
+<div id="syncTablesList" style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px 10px;font-size:13px"></div>
+</div>
+<div id="syncActions" style="display:none;margin-top:14px;display:flex;gap:8px;align-items:center">
+<button class="btn btn-primary btn-sm" onclick="startSync('all')" id="syncAllBtn">整库同步</button>
+<button class="btn btn-outline btn-sm" onclick="startSync('selected')" id="syncSelBtn">同步选中表</button>
+<span id="syncStatus" style="font-size:13px;color:#666;margin-left:8px"></span>
+</div>
+<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+<button class="btn btn-outline btn-sm" onclick="closeSyncModal()">关闭</button>
+</div>
+</div>
+</div>
+
+<script>
+function openSyncModal(){ document.getElementById('syncModal').style.display='flex'; }
+function closeSyncModal(){
+    document.getElementById('syncModal').style.display='none';
+    document.getElementById('syncTablesWrap').style.display='none';
+    document.getElementById('syncActions').style.display='none';
+    document.getElementById('syncStatus').textContent='';
+    document.getElementById('syncTablesList').innerHTML='';
+}
+function toggleSyncAll(){
+    var c=document.getElementById('syncCheckAll').checked;
+    document.querySelectorAll('.sync-tbl-cb').forEach(function(b){b.checked=c;});
+}
+function loadSyncTables(){
+    var s=document.getElementById('syncStatus'); s.textContent='加载中...';
+    var fd=new FormData();
+    fd.append('action','list_tables');
+    fd.append('src_host',document.getElementById('sync_src_host').value);
+    fd.append('src_port',document.getElementById('sync_src_port').value);
+    fd.append('src_user',document.getElementById('sync_src_user').value);
+    fd.append('src_pass',document.getElementById('sync_src_pass').value);
+    fd.append('src_dbname',document.getElementById('sync_src_dbname').value);
+    fetch('sync.php',{method:'POST',body:fd}).then(function(r){return r.json();}).then(function(d){
+        if(!d.success){s.textContent=d.message;return;}
+        var html='';
+        d.tables.forEach(function(t){
+            html+='<label style="display:block;cursor:pointer;margin:1px 0"><input type="checkbox" class="sync-tbl-cb" value="'+escapeHtml(t)+'" checked> '+escapeHtml(t)+'</label>';
+        });
+        document.getElementById('syncTablesList').innerHTML=html;
+        document.getElementById('syncTablesWrap').style.display='block';
+        document.getElementById('syncActions').style.display='flex';
+        document.getElementById('syncCheckAll').checked=true;
+        s.textContent='共 '+d.tables.length+' 张表';
+    }).catch(function(e){s.textContent='请求失败: '+e.message;});
+}
+function startSync(mode){
+    var s=document.getElementById('syncStatus'),
+        btnA=document.getElementById('syncAllBtn'),
+        btnS=document.getElementById('syncSelBtn');
+    s.textContent='同步中...'; btnA.disabled=true; btnS.disabled=true;
+    var tables=[];
+    if(mode==='selected'){
+        document.querySelectorAll('.sync-tbl-cb:checked').forEach(function(b){tables.push(b.value);});
+        if(tables.length===0){s.textContent='请至少勾选一张表'; btnA.disabled=false; btnS.disabled=false; return;}
+    }
+    var fd=new FormData();
+    fd.append('action','sync');
+    fd.append('mode',mode);
+    if(mode==='selected') fd.append('tables',JSON.stringify(tables));
+    var fields=['src_host','src_port','src_user','src_pass','src_dbname','tgt_host','tgt_port','tgt_user','tgt_pass','tgt_dbname'];
+    fields.forEach(function(f){fd.append(f,document.getElementById('sync_'+f).value);});
+    fetch('sync.php',{method:'POST',body:fd}).then(function(r){return r.json();}).then(function(d){
+        if(!d.success){s.textContent='失败: '+d.message; btnA.disabled=false; btnS.disabled=false; return;}
+        var msg='完成! 成功 '+d.total_success+' 张, 失败 '+d.total_fail+' 张';
+        if(d.results) d.results.forEach(function(r){msg+='\n'+r.table+': '+(r.status==='success'?r.rows+' 行':r.message);});
+        s.textContent=msg; s.style.whiteSpace='pre-line';
+        btnA.disabled=false; btnS.disabled=false;
+    }).catch(function(e){s.textContent='请求失败: '+e.message; btnA.disabled=false; btnS.disabled=false;});
+}
+document.addEventListener('click',function(e){if(e.target.id==='syncModal')closeSyncModal();});
 </script>
 
 </body>
